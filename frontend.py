@@ -13,7 +13,6 @@ from loguru import logger
 
 from tools import ObjectDetectionTool, PromptGeneratorTool
 
-st.set_page_config(layout="wide")
 llm = Ollama(model="llava:7b")
 
 class App:
@@ -59,7 +58,7 @@ class App:
             logger.error(e)
 
     def run(self) -> None:
-        st.title("Chat with Image Support")
+        st.title("Chat with LLava")
         if "chat" not in st.session_state:
             client = llm
             st.session_state.chat = client
