@@ -1,0 +1,105 @@
+from pathlib import Path
+import cv2
+import torch
+from matplotlib import pyplot as plt
+from torch.utils.data import Dataset, DataLoader
+import torchvision
+import itertools
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader, random_split
+import numpy as np
+
+
+class VideoDataset(Dataset):
+    def __init__(self, directory_label_dict, transform=None):
+        """
+        Initialize the dataset.
+
+        Args:
+            directory_label_dict (dict): A dictionary where keys are directory paths (Path objects)
+                                         and values are labels.
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.data = []
+        self.transform = transform
+
+        for dir_path, label in directory_label_dict.items():
+            if not dir_path.is_dir():
+                continue
+            for file_path in dir_path.iterdir():
+                if file_path.is_file() and self._is_video_file(file_path):
+                    self.data.append((file_path, label))
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        video_path, label = self.data[idx]
+        label = lab_num[label]
+        frames = self._load_video(video_path)
+        if self.transform:
+            frames = torch.stack([self.transform(frame) for frame in frames])
+        return frames[:2], label
+
+    def _is_video_file(self, file_path):
+      """Check if the file is a video based on its extension, and ignore files starting with '._'."""
+      # Ignore files starting with '._'
+      if file_path.name.startswith('._'):
+          return False
+
+      # Check if the file has a valid video extension
+      video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.wmv')
+      return file_path.suffix.lower() in video_extensions
+
+
+    def _load_video(self, video_path):
+        """Load a video file and sample frames using torchvision.io.read_video."""
+        video_path = str(video_path)  # Convert to string as required by read_video
+        frames, _, _ = torchvision.io.read_video(video_path, pts_unit = "sec", output_format="TCHW") # Compose transformation are compatible with this output format
+        return frames
+
+
+def get_dataset_splits(train_size = 0.8):
+    dataset = VideoDataset(mapping, transformation)
+
+    test_size = 1.0 - train_size
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+    return train_dataset, test_dataset
+
+
+ACTION_CLIPS_PATH = "atlas_dione_objectdetection\ATLAS_Dione_ObjectDetection\ATLAS_Dione_ObjectDetection_Study_ActionClips\ATLAS_Dione_ObjectDetection_Study_ActionClips"
+
+action_clips_path = Path(ACTION_CLIPS_PATH)
+directories = [item for item in action_clips_path.iterdir() if item.is_dir() and not item.name == "set12"]
+
+mapping = {"set00":"1 arm placing",
+            "set01":"2 arms placing",
+            "set02":"Placing Rings",
+            "set03":"Placing Rings 2 arms",
+            "set04":"Pull Off",
+            "set05":"Pull Through",
+            "set06":"Suture Pick Up",
+            "set07":"UVA Pick Up",
+            "set08":"Suture Pull Through",
+            "set09":"UVA Pull Through",
+            "set10":"Suture Tie",
+            "set11":"UVA Tie",
+             }
+mapping = {dir: mapping[dir.name] for dir in directories}
+
+lab_num = {item: i for i, item in enumerate(mapping.values())}
+num_lab = {item : i for i, item in lab_num.items()}
+# define video tranformations, maybe they could be skipped
+from activity_dataset import VideoDataset
+
+
+transformation = transforms.Compose([
+    # PadOrTruncateFrames(20),
+    transforms.Resize((336, 336)),  # Resize to LLava next video dimension
+    transforms.GaussianBlur(kernel_size=3),  # Denoising
+    # # transforms.RandomRotation(degrees=10),  # Augmentation
+    transforms.ConvertImageDtype(torch.float),
+    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # For RGB images
+])
+
+dataset = VideoDataset(mapping, transformation)
