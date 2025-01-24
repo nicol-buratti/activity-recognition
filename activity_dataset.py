@@ -8,6 +8,7 @@ import itertools
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 import numpy as np
+from transformers import LlavaNextVideoForConditionalGeneration, LlavaNextVideoProcessor, BitsAndBytesConfig
 
 
 class VideoDataset(Dataset):
@@ -39,7 +40,7 @@ class VideoDataset(Dataset):
         frames = self._load_video(video_path)
         if self.transform:
             frames = torch.stack([self.transform(frame) for frame in frames])
-        return frames[:2], label
+        return self.collate_fn(frames, label)
 
     def _is_video_file(self, file_path):
       """Check if the file is a video based on its extension, and ignore files starting with '._'."""
@@ -57,6 +58,37 @@ class VideoDataset(Dataset):
         video_path = str(video_path)  # Convert to string as required by read_video
         frames, _, _ = torchvision.io.read_video(video_path, pts_unit = "sec", output_format="TCHW") # Compose transformation are compatible with this output format
         return frames
+    
+    def collate_fn(self, video, label):
+        # Let's use chat template to format the prompt correctly
+        print(video.shape)
+        conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Provide a detailed caption for this video."},
+                        {"type": "video"},
+                        ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": num_lab[label]},
+                        ],
+                },
+            ]
+
+        prompt = processor.apply_chat_template(conversation, add_generation_prompt=False)
+
+        batch = processor(
+            text=prompt,
+            videos=video,
+            truncation=True,
+            max_length=MAX_LENGTH,
+            return_tensors="pt"
+        )
+
+        return batch
 
 
 def get_dataset_splits(train_size = 0.8):
@@ -67,7 +99,12 @@ def get_dataset_splits(train_size = 0.8):
     return train_dataset, test_dataset
 
 
+
 ACTION_CLIPS_PATH = "atlas_dione_objectdetection\ATLAS_Dione_ObjectDetection\ATLAS_Dione_ObjectDetection_Study_ActionClips\ATLAS_Dione_ObjectDetection_Study_ActionClips"
+MODEL_ID = "llava-hf/LLaVA-NeXT-Video-7B-hf"
+MAX_LENGTH = 256
+
+processor = LlavaNextVideoProcessor.from_pretrained(MODEL_ID)
 
 action_clips_path = Path(ACTION_CLIPS_PATH)
 directories = [item for item in action_clips_path.iterdir() if item.is_dir() and not item.name == "set12"]
@@ -95,7 +132,8 @@ from activity_dataset import VideoDataset
 
 transformation = transforms.Compose([
     # PadOrTruncateFrames(20),
-    transforms.Resize((336, 336)),  # Resize to LLava next video dimension
+    transforms.Resize((224, 224)),
+    # transforms.Resize((70, 70)),  # Resize to LLava next video dimension
     transforms.GaussianBlur(kernel_size=3),  # Denoising
     # # transforms.RandomRotation(degrees=10),  # Augmentation
     transforms.ConvertImageDtype(torch.float),
