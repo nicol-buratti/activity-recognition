@@ -170,3 +170,4 @@ dataset/
 runs/
 
 yolo*.pt
+output_llava

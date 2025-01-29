@@ -9,7 +9,8 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 import numpy as np
 from transformers import LlavaNextVideoForConditionalGeneration, LlavaNextVideoProcessor, BitsAndBytesConfig
-
+from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
 
 class VideoDataset(Dataset):
     def __init__(self, directory_label_dict, transform=None):
@@ -53,10 +54,11 @@ class VideoDataset(Dataset):
       return file_path.suffix.lower() in video_extensions
 
 
-    def _load_video(self, video_path):
+    def _load_video(self, video_path):#original one
         """Load a video file and sample frames using torchvision.io.read_video."""
         video_path = str(video_path)  # Convert to string as required by read_video
         frames, _, _ = torchvision.io.read_video(video_path, pts_unit = "sec", output_format="TCHW") # Compose transformation are compatible with this output format
+
         return frames
     
     def collate_fn(self, video, label):
@@ -84,11 +86,39 @@ class VideoDataset(Dataset):
             text=prompt,
             videos=video,
             truncation=True,
-            max_length=MAX_LENGTH,
+            # max_length=MAX_LENGTH,
             return_tensors="pt"
         )
 
         return batch
+    
+    ##PADDING
+    def _load_video(self, video_path, target_length=28):
+        """Carica un video e applica il padding o il campionamento."""
+        video_path = str(video_path)
+        frames, _, _ = torchvision.io.read_video(video_path, pts_unit="sec", output_format="TCHW")
+        num_frames = frames.size(0)
+
+        # # Campionamento o padding
+        # if num_frames > max_frames:
+        #     indices = torch.linspace(0, num_frames - 1, steps=max_frames).long()
+        #     frames = frames[indices]
+        # elif num_frames < max_frames:
+        #     pad_frames = max_frames - num_frames
+        #     padding = torch.zeros((pad_frames, frames.size(1), frames.size(2), frames.size(3)), dtype=frames.dtype)
+        #     frames = torch.cat([frames, padding], dim=0)
+
+        return frames
+        # C, T, H, W = frames.shape
+
+        # if T != target_length:
+        #     # Use interpolation to resample the video frames
+        #     video_tensor = video_tensor.unsqueeze(0)  # Add batch dimension
+        #     video_tensor = F.interpolate(video_tensor, size=(target_length, H, W), mode='trilinear', align_corners=False)
+        #     video_tensor = video_tensor.squeeze(0)  # Remove batch dimension
+
+        # return video_tensor
+
 
 
 def get_dataset_splits(train_size = 0.8):
@@ -102,7 +132,7 @@ def get_dataset_splits(train_size = 0.8):
 
 ACTION_CLIPS_PATH = "atlas_dione_objectdetection\ATLAS_Dione_ObjectDetection\ATLAS_Dione_ObjectDetection_Study_ActionClips\ATLAS_Dione_ObjectDetection_Study_ActionClips"
 MODEL_ID = "llava-hf/LLaVA-NeXT-Video-7B-hf"
-MAX_LENGTH = 256
+MAX_LENGTH = 11000
 
 processor = LlavaNextVideoProcessor.from_pretrained(MODEL_ID)
 
@@ -132,7 +162,7 @@ from activity_dataset import VideoDataset
 
 transformation = transforms.Compose([
     # PadOrTruncateFrames(20),
-    transforms.Resize((224, 224)),
+    transforms.Resize((336, 336)),
     # transforms.Resize((70, 70)),  # Resize to LLava next video dimension
     transforms.GaussianBlur(kernel_size=3),  # Denoising
     # # transforms.RandomRotation(degrees=10),  # Augmentation
