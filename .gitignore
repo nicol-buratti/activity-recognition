@@ -171,3 +171,10 @@ runs/
 
 yolo*.pt
 output_llava
+pexels
+temp_dir
+ATLAS_*
+llava*
+!llava_finetuning.ipynb 
+test_trainer
+Fine_tune*
