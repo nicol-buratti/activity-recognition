@@ -21,7 +21,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = LlavaNextVideoForConditionalGeneration.from_pretrained(
     REPO_ID, 
     torch_dtype=torch.float16, 
-    low_cpu_mem_usage=True, 
+    # low_cpu_mem_usage=True, 
     load_in_4bit=True
 ).to(0)
 
@@ -42,7 +42,7 @@ def run_llava(conversation, video = None):
 
     out = model.generate(**batch, max_length = MAX_LENGTH, do_sample = True)
     generated_text = processor.batch_decode(out, skip_special_tokens = True)
-    _,_,generated_text = generated_text[0].partition("ASSISTANT: ")
+    _,_,generated_text = generated_text[0].rpartition("ASSISTANT: ")
     return generated_text
 
 # Wrap it as a Runnable

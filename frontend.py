@@ -79,6 +79,7 @@ class App:
             if prompt:
                 content.append({"type": "text", "text": prompt})
             if uploaded_file is not None:
+                print(f"{uploaded_file=}")
                 if "image" in uploaded_file.type:
                     content.append({"type": "image", "path" : uploaded_file})
                 if "video" in uploaded_file.type:
@@ -91,12 +92,15 @@ class App:
                     st.markdown(prompt)
                 if uploaded_file is not None:
                     st.image(uploaded_file)
-            # Get response from the LLM
-            response = st.session_state.chat.invoke([message])
-            # Append assistant's response to messages
-            st.session_state.messages.append({"role": "assistant", "content": [{"type": "text", "text":response}]})
+
+            # # Get response from the LLM
             with st.chat_message("assistant"):
+                response = st.session_state.chat.invoke([
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.messages
+                        ])
                 st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": [{"type": "text", "text":response}]})
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
