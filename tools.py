@@ -21,27 +21,17 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = LlavaNextVideoForConditionalGeneration.from_pretrained(
     REPO_ID, 
     torch_dtype=torch.float16, 
-    # low_cpu_mem_usage=True, 
+    low_cpu_mem_usage=True, 
     load_in_4bit=True
-).to(0)
+).to(device)
 
 processor = LlavaNextVideoProcessor.from_pretrained(REPO_ID)
 
 # TODO add video
-def run_llava(conversation, video = None):
-    prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
-
-    batch = processor(
-        text=prompt,
-        truncation=True,
-        padding=True,
-        max_length=MAX_LENGTH,
-        return_tensors="pt",
-    ).to(device)
-
-
-    out = model.generate(**batch, max_length = MAX_LENGTH, do_sample = True)
-    generated_text = processor.batch_decode(out, skip_special_tokens = True)
+def run_llava(conversation):
+    inputs  = processor.apply_chat_template(conversation, num_frames=8,  add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors = "pt").to(device)
+    output = model.generate(**inputs, max_new_tokens=50, max_length = MAX_LENGTH, do_sample = True)
+    generated_text = processor.batch_decode(output, skip_special_tokens = True)
     _,_,generated_text = generated_text[0].rpartition("ASSISTANT: ")
     return generated_text
 

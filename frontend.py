@@ -3,7 +3,6 @@ import streamlit as st
 import torch
 from langchain.agents import initialize_agent
 from langchain.agents.agent import  AgentType
-from langchain_core.messages import HumanMessage
 
 from langchain.memory import ConversationBufferMemory
 from loguru import logger
@@ -54,6 +53,13 @@ class App:
         except Exception as e:
             logger.error(e)
 
+    def _copy_file(self, uploaded_image):
+        tmp_dir = "tmp/"
+        os.makedirs(tmp_dir, exist_ok=True)
+        temp_file_path = os.path.join(tmp_dir, uploaded_image.name)
+        with open(temp_file_path, "wb") as file:
+            file.write(uploaded_image.getvalue())
+
     def run(self) -> None:
         st.title("Chat with LLava")
         if "chat" not in st.session_state:
@@ -65,7 +71,7 @@ class App:
 
         with st.form("chat_form"):
             prompt = st.text_input("Enter your message:")
-            uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png"])
+            uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png", "mkv"])
             submit_button = st.form_submit_button("Send")
             
         # display the chat messages
@@ -79,21 +85,25 @@ class App:
             if prompt:
                 content.append({"type": "text", "text": prompt})
             if uploaded_file is not None:
+                self._copy_file(uploaded_file)
                 print(f"{uploaded_file=}")
                 if "image" in uploaded_file.type:
-                    content.append({"type": "image", "path" : uploaded_file})
+                    content.append({"type": "image", "path" : f"tmp/{uploaded_file.name}"})
                 if "video" in uploaded_file.type:
-                    content.append({"type": "video"})
+                    content.append({"type": "video", "path" : f"tmp/{uploaded_file.name}"})
 
             # Append user's message to session state
-            st.session_state.messages.append(message.copy()) #TODO test with files
+            st.session_state.messages.append(message) # TODO test with files
             with st.chat_message("user"):
                 if prompt:
                     st.markdown(prompt)
                 if uploaded_file is not None:
-                    st.image(uploaded_file)
+                    if "image" in uploaded_file.type:
+                        st.image(uploaded_file)
+                    if "video" in uploaded_file.type:
+                        st.video(uploaded_file)
 
-            # # Get response from the LLM
+            # Get response from the LLM
             with st.chat_message("assistant"):
                 response = st.session_state.chat.invoke([
                             {"role": m["role"], "content": m["content"]}
