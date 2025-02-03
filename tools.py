@@ -4,43 +4,99 @@ import time
 from typing import Optional
 from ultralytics import YOLO
 
-from langchain.llms import Ollama
-from langchain.schema.messages import HumanMessage
+from langchain.schema.runnable import RunnableLambda
 from langchain.tools import BaseTool
 from loguru import logger
 from PIL import Image
 
+from transformers import LlavaNextVideoForConditionalGeneration, LlavaNextVideoProcessor
+import torch
+
+from utils import MAX_LENGTH, read_video_decord
+
+REPO_ID = "cams01/LLaVa-robot-activity-recognition"
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = LlavaNextVideoForConditionalGeneration.from_pretrained(
+    REPO_ID, 
+    torch_dtype=torch.float16, 
+    low_cpu_mem_usage=True, 
+    load_in_4bit=True
+).to(0)
+
+processor = LlavaNextVideoProcessor.from_pretrained(REPO_ID)
+
+# TODO add video
+def run_llava(conversation, video = None):
+    prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
+
+    batch = processor(
+        text=prompt,
+        truncation=True,
+        padding=True,
+        max_length=MAX_LENGTH,
+        return_tensors="pt",
+    ).to(device)
+
+
+    out = model.generate(**batch, max_length = MAX_LENGTH, do_sample = True)
+    generated_text = processor.batch_decode(out, skip_special_tokens = True)
+    _,_,generated_text = generated_text[0].partition("ASSISTANT: ")
+    return generated_text
+
+# Wrap it as a Runnable
+llm = RunnableLambda(run_llava)
+
+
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
-class PromptGeneratorTool(BaseTool):
-    name: str = "Image object detection prompt generator tool"
-    description: str = "Generate prompts based on the description of the image for object detection."
+#llm = Ollama(model="llava:7b")
 
-    llm: Optional[Ollama] = None
+class VideoActivityRecognitionTool(BaseTool):
+    name: str = "Video activity detection tool"
+    description: str = "Classifies video content to detect and recognize activities performed by robotic tools, enabling accurate action identification for automated analysis."
 
-    def setup(self, llm: Ollama) -> "PromptGeneratorTool":
+    llm: Optional[LlavaNextVideoForConditionalGeneration] = None
+
+    def setup(self, llm: LlavaNextVideoForConditionalGeneration) -> "VideoActivityRecognitionTool":
         self.llm = llm
         return self
 
-    def _run(self, image_desc: str) -> str:
-        logger.debug(f"Image description: {image_desc}")
-        input_msg = [
-            HumanMessage(
-                content=(
-                    "Remove stop words and useless words, only keep the 'objects', "
-                    f"from the following sentence:\n\n{image_desc}\n\n"
-                    "List the objects, separating each with a comma."
-                )
-            )
+    def _run(self, video_path: str) -> str:
+        logger.debug(f"Video path: {video_path}")
+        video = read_video_decord(video_path)
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "You are working in an industrial setting where robotic arms perform various activities. Your task is to analyze videos of these robotic arms in action and accurately classify the specific activity being performed in each video. Answer only with the activity detected."},
+                    {"type": "video"},
+                    ],
+            },
         ]
-        gen_prompt = self.llm.generate(messages=input_msg).generations[0].text
-        logger.debug(f"Generated prompt: {gen_prompt}")
-        return gen_prompt
+
+        prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
+
+        batch = processor(
+            text=prompt,
+            videos=video,
+            truncation=True,
+            max_length=MAX_LENGTH,
+            return_tensors="pt",
+        ).to(device)
+
+        video = video.to(llm.device)
+
+        out = llm.generate(**batch, pixel_values_videos = video, max_length = MAX_LENGTH, do_sample = True)
+        generated_text = processor.batch_decode(out, skip_special_tokens = True)
+
+        logger.debug(f"Generated prompt: {generated_text}")
+        return generated_text
 
     def _arun(self, query: str):
         raise NotImplementedError
-
 
 class ObjectDetectionTool(BaseTool):
     name: str = "Object detection on image tool"
@@ -71,4 +127,3 @@ class ObjectDetectionTool(BaseTool):
 
     def _arun(self, query: str):
         raise NotImplementedError
-

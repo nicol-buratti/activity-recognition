@@ -1,19 +1,16 @@
-import base64
 import os
-from ultralytics import YOLO
 import streamlit as st
 import torch
 from langchain.agents import initialize_agent
 from langchain.agents.agent import  AgentType
 from langchain_core.messages import HumanMessage
 
-from langchain_community.llms import Ollama
 from langchain.memory import ConversationBufferMemory
 from loguru import logger
 
-from tools import ObjectDetectionTool, PromptGeneratorTool
+from tools import VideoActivityRecognitionTool, llm
 
-llm = Ollama(model="llava:7b")
+# llm = Ollama(model="llava:7b")
 
 class App:
     def __init__(self, device) -> None:
@@ -22,13 +19,13 @@ class App:
         self._agent = initialize_agent(
             agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
             tools=[
-                ObjectDetectionTool().setup(
-                    YOLO(
-                        "C:/Users/Informatica_UNICAM/Desktop/activity-recognition/"
-                        "runs/detect/custom_yolo7/weights/best.pt"
-                    )
-                ),
-                PromptGeneratorTool().setup(llm),
+                # ObjectDetectionTool().setup(
+                #     YOLO(
+                #         "C:/Users/Informatica_UNICAM/Desktop/activity-recognition/"
+                #         "runs/detect/custom_yolo7/weights/best.pt"
+                #     )
+                # ),
+                VideoActivityRecognitionTool().setup(llm),
             ],
             llm=llm,
             memory=ConversationBufferMemory(return_messages=True),
@@ -71,24 +68,24 @@ class App:
             uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png"])
             submit_button = st.form_submit_button("Send")
             
-        if submit_button:
-            message_content = []
-            if prompt:
-                message_content.append({"type": "text", "text": prompt})
-            if uploaded_file is not None:
-                # Read the image data and encode it in base64
-                image_bytes = uploaded_file.read()
-                image_type = uploaded_file.type  # e.g., 'image/jpeg'
-                image_data = base64.b64encode(image_bytes).decode("utf-8")
-                # Include the image data in the message content
-                print( {"type": "image_url", "image_url": {"url": f"data:{image_type};base64,{image_data}"}})
-                message_content.append(
-                    {"type": "image_url", "image_url": {"url": f"data:{image_type};base64,{image_data}"}}
-                )
+        # display the chat messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"][0]["text"]) # TODO integrate images/video
 
-            message = HumanMessage(content=message_content)
+        if submit_button:
+            content = []
+            message = {"role": "user", "content": content}
+            if prompt:
+                content.append({"type": "text", "text": prompt})
+            if uploaded_file is not None:
+                if "image" in uploaded_file.type:
+                    content.append({"type": "image", "path" : uploaded_file})
+                if "video" in uploaded_file.type:
+                    content.append({"type": "video"})
+
             # Append user's message to session state
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append(message.copy()) #TODO test with files
             with st.chat_message("user"):
                 if prompt:
                     st.markdown(prompt)
@@ -97,7 +94,7 @@ class App:
             # Get response from the LLM
             response = st.session_state.chat.invoke([message])
             # Append assistant's response to messages
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.session_state.messages.append({"role": "assistant", "content": [{"type": "text", "text":response}]})
             with st.chat_message("assistant"):
                 st.markdown(response)
 
