@@ -77,7 +77,13 @@ class App:
         # display the chat messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
-                st.markdown(message["content"][0]["text"]) # TODO integrate images/video
+                for item in message["content"]:
+                    if item["type"] == "text":
+                        st.markdown(item["text"])
+                    if item["type"] == "image":
+                        st.image(item["path"])
+                    if item["type"] == "video":
+                        st.video(item["path"])
 
         if submit_button:
             content = []
@@ -86,11 +92,11 @@ class App:
                 content.append({"type": "text", "text": prompt})
             if uploaded_file is not None:
                 self._copy_file(uploaded_file)
-                print(f"{uploaded_file=}")
+                tmp_path = os.path.join("tmp", uploaded_file.name)
                 if "image" in uploaded_file.type:
-                    content.append({"type": "image", "path" : f"tmp/{uploaded_file.name}"})
+                    content.append({"type": "image", "path" : tmp_path})
                 if "video" in uploaded_file.type:
-                    content.append({"type": "video", "path" : f"tmp/{uploaded_file.name}"})
+                    content.append({"type": "video", "path" : tmp_path})
 
             # Append user's message to session state
             st.session_state.messages.append(message) # TODO test with files
