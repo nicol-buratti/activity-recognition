@@ -178,3 +178,4 @@ llava*
 !llava_finetuning.ipynb 
 test_trainer
 Fine_tune*
+tmp
