@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import streamlit as st
 import torch
 from langchain.agents import initialize_agent
@@ -8,8 +9,6 @@ from langchain.memory import ConversationBufferMemory
 from loguru import logger
 
 from tools import VideoActivityRecognitionTool, llm
-
-# llm = Ollama(model="llava:7b")
 
 class App:
     def __init__(self, device) -> None:
@@ -24,7 +23,7 @@ class App:
                 #         "runs/detect/custom_yolo7/weights/best.pt"
                 #     )
                 # ),
-                VideoActivityRecognitionTool().setup(llm),
+                # VideoActivityRecognitionTool().setup(llm),
             ],
             llm=llm,
             memory=ConversationBufferMemory(return_messages=True),
@@ -68,10 +67,10 @@ class App:
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
-
+        
         with st.form("chat_form"):
             prompt = st.text_input("Enter your message:")
-            uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png", "mkv"])
+            uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png", "mp4", "mkv"])
             submit_button = st.form_submit_button("Send")
             
         # display the chat messages
@@ -92,14 +91,14 @@ class App:
                 content.append({"type": "text", "text": prompt})
             if uploaded_file is not None:
                 self._copy_file(uploaded_file)
-                tmp_path = os.path.join("tmp", uploaded_file.name)
+                tmp_path = Path(f"tmp/{uploaded_file.name}")
                 if "image" in uploaded_file.type:
                     content.append({"type": "image", "path" : tmp_path})
                 if "video" in uploaded_file.type:
                     content.append({"type": "video", "path" : tmp_path})
 
             # Append user's message to session state
-            st.session_state.messages.append(message) # TODO test with files
+            st.session_state.messages.append(message.copy()) # TODO check if is correct
             with st.chat_message("user"):
                 if prompt:
                     st.markdown(prompt)

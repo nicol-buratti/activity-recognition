@@ -1,39 +1,103 @@
 import os
+from pathlib import Path
 import sys
 import time
 from typing import Optional
+import cv2
 from ultralytics import YOLO
 
 from langchain.schema.runnable import RunnableLambda
 from langchain.tools import BaseTool
 from loguru import logger
 from PIL import Image
-
-from transformers import LlavaNextVideoForConditionalGeneration, LlavaNextVideoProcessor
+import av
+import numpy as np
+from transformers import LlavaNextVideoForConditionalGeneration, LlavaNextVideoProcessor, BitsAndBytesConfig
 import torch
 
 from utils import MAX_LENGTH, read_video_decord
 
-REPO_ID = "cams01/LLaVa-robot-activity-recognition"
+REPO_ID = "llava-hf/LLaVA-NeXT-Video-7B-DPO-hf"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
+
 model = LlavaNextVideoForConditionalGeneration.from_pretrained(
     REPO_ID, 
-    torch_dtype=torch.float16, 
-    low_cpu_mem_usage=True, 
-    load_in_4bit=True
+    quantization_config=quantization_config,
+    device_map=device,
 ).to(device)
 
 processor = LlavaNextVideoProcessor.from_pretrained(REPO_ID)
 
-# TODO add video
+def read_video_pyav(container, indices):
+    '''
+    Decode the video with PyAV decoder.
+    Args:
+        container (`av.container.input.InputContainer`): PyAV container.
+        indices (`List[int]`): List of frame indices to decode.
+    Returns:
+        result (np.ndarray): np array of decoded frames of shape (num_frames, height, width, 3).
+    '''
+    frames = []
+    container.seek(0)
+    start_index = indices[0]
+    end_index = indices[-1]
+    for i, frame in enumerate(container.decode(video=0)):
+        if i > end_index:
+            break
+        if i >= start_index and i in indices:
+            frames.append(frame)
+    return np.stack([x.to_ndarray(format="rgb24") for x in frames])
+
+def process_video(path, selected_frames = 8):
+    container = av.open(path)
+
+    cap = cv2.VideoCapture(path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # # sample uniformly frames from the video
+    # total_frames = container.streams.video[0].frames
+    print(f"{total_frames=}")
+    indices = np.arange(0, total_frames, total_frames / selected_frames).astype(int)
+    clip = read_video_pyav(container, indices)
+    return clip
+
 def run_llava(conversation):
-    inputs  = processor.apply_chat_template(conversation, num_frames=8,  add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors = "pt").to(device)
-    output = model.generate(**inputs, max_new_tokens=50, max_length = MAX_LENGTH, do_sample = True)
-    generated_text = processor.batch_decode(output, skip_special_tokens = True)
-    _,_,generated_text = generated_text[0].rpartition("ASSISTANT: ")
+    print(f"{conversation=}")
+    videos = []
+    conversation_copy = conversation.copy()
+    for conv in conversation_copy:
+        for item in conv["content"]:
+            print(f"content = {item}")
+            if item["type"] == "video":
+                path = Path(item.pop("path"))
+                print(f"content AFTER = {item}\n path = {path}")
+                clip = process_video(path)
+                videos.append(clip)
+    
+    print(f"{conversation_copy=}")
+    prompt = processor.apply_chat_template(conversation_copy, add_generation_prompt=True)
+    if videos:
+        inputs_video = processor(text=prompt, videos=videos, padding=True, return_tensors="pt").to(model.device)
+    else:
+        inputs_video = processor(text=prompt, padding=True, return_tensors="pt").to(model.device)
+
+    output = model.generate(**inputs_video, do_sample=False, max_new_tokens = 50_000)
+    generated_text = processor.decode(output[0][2:], skip_special_tokens=True)
+    print(f"{generated_text=}")
+    # inputs  = processor.apply_chat_template(conversation, num_frames=8,  add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors = "pt").to(device)
+    # output = model.generate(**inputs, max_length = MAX_LENGTH, do_sample = True)
+    # generated_text = processor.batch_decode(output, skip_special_tokens = True)
+    _,_,generated_text = generated_text.rpartition("ASSISTANT:")
+    print(f"after: {generated_text=}")
+
     return generated_text
+
 
 # Wrap it as a Runnable
 llm = RunnableLambda(run_llava)
@@ -41,8 +105,6 @@ llm = RunnableLambda(run_llava)
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
-
-#llm = Ollama(model="llava:7b")
 
 class VideoActivityRecognitionTool(BaseTool):
     name: str = "Video activity detection tool"
