@@ -67,19 +67,14 @@ def process_video(path, selected_frames=8):
 
     # # sample uniformly frames from the video
     # total_frames = container.streams.video[0].frames
-    print(f"{total_frames=}")
     indices = np.arange(0, total_frames, total_frames / selected_frames).astype(int)
     clip = read_video_pyav(container, indices)
     return clip
 
 
 def run_llava(conversation):
-    print(f"{conversation=}")
     videos = []
     conversation_copy = map_conversation_to_llava_format(conversation, videos)
-
-    print(f"{conversation_copy=}")
-    print(f"{conversation=}")
     prompt = processor.apply_chat_template(
         conversation_copy, add_generation_prompt=True
     )
@@ -94,13 +89,7 @@ def run_llava(conversation):
 
     output = model.generate(**inputs_video, do_sample=False, max_new_tokens=50_000)
     generated_text = processor.decode(output[0][2:], skip_special_tokens=True)
-    print(f"{generated_text=}")
-    # inputs  = processor.apply_chat_template(conversation, num_frames=8,  add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors = "pt").to(device)
-    # output = model.generate(**inputs, max_length = MAX_LENGTH, do_sample = True)
-    # generated_text = processor.batch_decode(output, skip_special_tokens = True)
     _, _, generated_text = generated_text.rpartition("ASSISTANT:")
-    print(f"after: {generated_text=}")
-
     return generated_text
 
 def map_conversation_to_llava_format(conversation, videos):
@@ -111,7 +100,6 @@ def map_conversation_to_llava_format(conversation, videos):
             item_copy = item.copy()
             if item["type"] == "video":
                 path = item_copy.pop("path")
-                print(f"content AFTER = {item}\n path = {path}")
                 clip = process_video(path)
                 videos.append(clip)
                 # TODO add images

@@ -75,7 +75,6 @@ class App:
             )
             submit_button = st.form_submit_button("Send")
 
-        print(f"{st.session_state.messages=}")
         # display the chat messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
