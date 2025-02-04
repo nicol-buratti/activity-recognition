@@ -3,16 +3,16 @@ from pathlib import Path
 import streamlit as st
 import torch
 from langchain.agents import initialize_agent
-from langchain.agents.agent import  AgentType
+from langchain.agents.agent import AgentType
 
 from langchain.memory import ConversationBufferMemory
 from loguru import logger
 
 from tools import VideoActivityRecognitionTool, llm
 
+
 class App:
     def __init__(self, device) -> None:
-
         # if "agent" not in st.session_state:
         self._agent = initialize_agent(
             agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
@@ -67,12 +67,15 @@ class App:
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
-        
+
         with st.form("chat_form"):
             prompt = st.text_input("Enter your message:")
-            uploaded_file = st.file_uploader("Upload an image (optional)", type=["jpg", "jpeg", "png", "mp4", "mkv"])
+            uploaded_file = st.file_uploader(
+                "Upload an image (optional)", type=["jpg", "jpeg", "png", "mp4", "mkv"]
+            )
             submit_button = st.form_submit_button("Send")
-            
+
+        print(f"{st.session_state.messages=}")
         # display the chat messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -80,9 +83,9 @@ class App:
                     if item["type"] == "text":
                         st.markdown(item["text"])
                     if item["type"] == "image":
-                        st.image(item["path"])
+                        st.image(str(item["path"]))
                     if item["type"] == "video":
-                        st.video(item["path"])
+                        st.video(str(item["path"]))
 
         if submit_button:
             content = []
@@ -93,12 +96,12 @@ class App:
                 self._copy_file(uploaded_file)
                 tmp_path = Path(f"tmp/{uploaded_file.name}")
                 if "image" in uploaded_file.type:
-                    content.append({"type": "image", "path" : tmp_path})
+                    content.append({"type": "image", "path": tmp_path})
                 if "video" in uploaded_file.type:
-                    content.append({"type": "video", "path" : tmp_path})
+                    content.append({"type": "video", "path": tmp_path})
 
             # Append user's message to session state
-            st.session_state.messages.append(message.copy()) # TODO check if is correct
+            st.session_state.messages.append(message.copy())  # TODO check if is correct
             with st.chat_message("user"):
                 if prompt:
                     st.markdown(prompt)
@@ -110,12 +113,20 @@ class App:
 
             # Get response from the LLM
             with st.chat_message("assistant"):
-                response = st.session_state.chat.invoke([
-                            {"role": m["role"], "content": m["content"]}
-                            for m in st.session_state.messages
-                        ])
+                response = st.session_state.chat.invoke(
+                    [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.messages
+                    ]
+                )
                 st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": [{"type": "text", "text":response}]})
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": response}],
+                    }
+                )
+
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
