@@ -1,17 +1,13 @@
 import os
-from pathlib import Path
 import sys
 import time
 from typing import Optional
-import cv2
 from ultralytics import YOLO
 
 from langchain.schema.runnable import RunnableLambda
 from langchain.tools import BaseTool
 from loguru import logger
 from PIL import Image
-import av
-import numpy as np
 from transformers import (
     LlavaNextVideoForConditionalGeneration,
     LlavaNextVideoProcessor,
@@ -22,6 +18,7 @@ import torch
 from utils import MAX_LENGTH, read_video_decord
 
 REPO_ID = "llava-hf/LLaVA-NeXT-Video-7B-DPO-hf"
+# REPO_ID = "cams01/LLaVa-robot-activity-recognition"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -37,62 +34,7 @@ model = LlavaNextVideoForConditionalGeneration.from_pretrained(
 
 processor = LlavaNextVideoProcessor.from_pretrained(REPO_ID)
 
-
-def read_video_pyav(container, indices):
-    """
-    Decode the video with PyAV decoder.
-    Args:
-        container (`av.container.input.InputContainer`): PyAV container.
-        indices (`List[int]`): List of frame indices to decode.
-    Returns:
-        result (np.ndarray): np array of decoded frames of shape (num_frames, height, width, 3).
-    """
-    frames = []
-    container.seek(0)
-    start_index = indices[0]
-    end_index = indices[-1]
-    for i, frame in enumerate(container.decode(video=0)):
-        if i > end_index:
-            break
-        if i >= start_index and i in indices:
-            frames.append(frame)
-    return np.stack([x.to_ndarray(format="rgb24") for x in frames])
-
-
-def process_video(path, selected_frames=8):
-    container = av.open(path)
-
-    cap = cv2.VideoCapture(path)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    # # sample uniformly frames from the video
-    # total_frames = container.streams.video[0].frames
-    indices = np.arange(0, total_frames, total_frames / selected_frames).astype(int)
-    clip = read_video_pyav(container, indices)
-    return clip
-
-
-def run_llava(conversation):
-    videos = []
-    conversation_copy = map_conversation_to_llava_format(conversation, videos)
-    prompt = processor.apply_chat_template(
-        conversation_copy, add_generation_prompt=True
-    )
-    if videos:
-        inputs_video = processor(
-            text=prompt, videos=videos, padding=True, return_tensors="pt"
-        ).to(model.device)
-    else:
-        inputs_video = processor(text=prompt, padding=True, return_tensors="pt").to(
-            model.device
-        )
-
-    output = model.generate(**inputs_video, do_sample=False, max_new_tokens=50_000)
-    generated_text = processor.decode(output[0][2:], skip_special_tokens=True)
-    _, _, generated_text = generated_text.rpartition("ASSISTANT:")
-    return generated_text
-
-def map_conversation_to_llava_format(conversation, videos):
+def map_conversation_to_llava_format(conversation, videos, images):
     conversation_copy = []
     for conv in conversation:
         conv_line = {"role": conv["role"], "content": []}
@@ -100,13 +42,37 @@ def map_conversation_to_llava_format(conversation, videos):
             item_copy = item.copy()
             if item["type"] == "video":
                 path = item_copy.pop("path")
-                clip = process_video(path)
+                clip = read_video_decord(str(path))
                 videos.append(clip)
-                # TODO add images
+            if item["type"] == "image":
+                raw_image = Image.open(item_copy.pop("path"))
+                images.append(raw_image)
 
             conv_line["content"].append(item_copy)
         conversation_copy.append(conv_line)
     return conversation_copy
+
+def run_llava(conversation):
+    videos, images  = [], []
+    conversation_copy = map_conversation_to_llava_format(conversation, videos, images)
+    prompt = processor.apply_chat_template(
+        conversation_copy, add_generation_prompt=True
+    )
+
+    # processor format
+    if not videos:
+        videos = None
+    if not images:
+        images = None
+
+    inputs_video = processor(
+                text=prompt, videos=videos, images=images, padding=True, return_tensors="pt"
+            ).to(model.device)
+
+    output = model.generate(**inputs_video, do_sample=False, max_new_tokens=50_000)
+    generated_text = processor.decode(output[0][2:], skip_special_tokens=True)
+    _, _, generated_text = generated_text.rpartition("ASSISTANT:")
+    return generated_text
 
 
 # Wrap it as a Runnable

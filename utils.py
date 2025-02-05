@@ -2,7 +2,7 @@ from decord import VideoReader, cpu
 import numpy as np
 
 
-NUM_FRAMES = 100
+NUM_FRAMES = 16
 MAX_LENGTH = 30_000
 
 def read_video_decord(video_path, num_frames=NUM_FRAMES):
