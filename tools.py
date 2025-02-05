@@ -16,9 +16,10 @@ from transformers import (
 import torch
 
 from utils import MAX_LENGTH, read_video_decord
+from dotenv import load_dotenv
+load_dotenv()
 
-REPO_ID = "llava-hf/LLaVA-NeXT-Video-7B-DPO-hf"
-# REPO_ID = "cams01/LLaVa-robot-activity-recognition"
+REPO_ID = os.getenv('REPO_ID')
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

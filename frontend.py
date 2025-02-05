@@ -9,7 +9,7 @@ from langchain.memory import ConversationBufferMemory
 from loguru import logger
 
 from tools import VideoActivityRecognitionTool, llm
-
+    
 
 class App:
     def __init__(self, device) -> None:

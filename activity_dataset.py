@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 from torch.utils.data import Dataset
 from torch.utils.data import  random_split
-
-ACTION_CLIPS_PATH = "atlas_dione_objectdetection\ATLAS_Dione_ObjectDetection\ATLAS_Dione_ObjectDetection_Study_ActionClips\ATLAS_Dione_ObjectDetection_Study_ActionClips"
+from dotenv import load_dotenv
+load_dotenv()
+ACTION_CLIPS_PATH = os.getenv('ACTION_CLIPS_PATH')
 
 
 class VideoDataset(Dataset):
