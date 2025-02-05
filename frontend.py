@@ -9,7 +9,7 @@ from langchain.memory import ConversationBufferMemory
 from loguru import logger
 
 from tools import VideoActivityRecognitionTool, llm
-    
+
 
 class App:
     def __init__(self, device) -> None:
@@ -61,6 +61,10 @@ class App:
 
     def run(self) -> None:
         st.title("Chat with LLava")
+        
+        if "uploader_key" not in st.session_state:
+            st.session_state.uploader_key = 1
+            
         if "chat" not in st.session_state:
             client = llm
             st.session_state.chat = client
@@ -71,10 +75,12 @@ class App:
         with st.form("chat_form"):
             prompt = st.text_input("Enter your message:")
             uploaded_file = st.file_uploader(
-                "Upload an image (optional)", type=["jpg", "jpeg", "png", "mp4", "mkv"]
+                "Upload an image (optional)",
+                type=["jpg", "jpeg", "png", "mp4", "mkv"],
+                key=st.session_state.uploader_key
             )
             submit_button = st.form_submit_button("Send")
-
+        
         # display the chat messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -125,6 +131,7 @@ class App:
                         "content": [{"type": "text", "text": response}],
                     }
                 )
+        st.session_state.uploader_key += 1
 
 
 if __name__ == "__main__":
