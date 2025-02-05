@@ -18,8 +18,6 @@ def read_video_decord(video_path, num_frames=NUM_FRAMES):
     Returns:
         np.ndarray: np array of decoded frames of shape (num_frames, height, width, 3).
     '''
-    print(f"{video_path=}")
-    print(f"{num_frames=}")
     vr = VideoReader(uri=video_path, ctx=cpu(0)) # you need to install from source to use gpu ctx
     indices = np.arange(0, len(vr), len(vr) / num_frames).astype(int)
     frames = vr.get_batch(indices).asnumpy()
