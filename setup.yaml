@@ -1,6 +1,0 @@
-train: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\train\\images
-val: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\val\\images
-test: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\test
-
-nc: 2
-names: ['LeftTool','RightTool']

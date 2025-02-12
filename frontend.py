@@ -7,8 +7,9 @@ from langchain.agents.agent import AgentType
 
 from langchain.memory import ConversationBufferMemory
 from loguru import logger
+from ultralytics import YOLO
 
-from tools import VideoActivityRecognitionTool, llm
+from tools import ObjectDetectionTool, VideoActivityRecognitionTool, llm
 
 
 class App:
@@ -17,12 +18,12 @@ class App:
         self._agent = initialize_agent(
             agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
             tools=[
-                # ObjectDetectionTool().setup(
-                #     YOLO(
-                #         "C:/Users/Informatica_UNICAM/Desktop/activity-recognition/"
-                #         "runs/detect/custom_yolo7/weights/best.pt"
-                #     )
-                # ),
+                ObjectDetectionTool().setup(
+                    YOLO(
+                        "C:/Users/Informatica_UNICAM/Desktop/activity-recognition/"
+                        "runs/detect/custom_yolo7/weights/best.pt"
+                    )
+                ),
                 # VideoActivityRecognitionTool().setup(llm),
             ],
             llm=llm,
@@ -61,10 +62,7 @@ class App:
 
     def run(self) -> None:
         st.title("Chat with LLava")
-        
-        if "uploader_key" not in st.session_state:
-            st.session_state.uploader_key = 1
-            
+
         if "chat" not in st.session_state:
             client = llm
             st.session_state.chat = client
@@ -77,7 +75,6 @@ class App:
             uploaded_file = st.file_uploader(
                 "Upload an image (optional)",
                 type=["jpg", "jpeg", "png", "mp4", "mkv"],
-                key=st.session_state.uploader_key
             )
             submit_button = st.form_submit_button("Send")
         
@@ -131,7 +128,6 @@ class App:
                         "content": [{"type": "text", "text": response}],
                     }
                 )
-        st.session_state.uploader_key += 1
 
 
 if __name__ == "__main__":
