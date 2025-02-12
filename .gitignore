@@ -180,3 +180,5 @@ test_trainer
 Fine_tune*
 tmp
 sample.json
+YOLO_dataset_classification
+*.cache
