@@ -174,8 +174,9 @@ output_llava
 pexels
 temp_dir
 ATLAS_*
-llava*
+llava_finetuning*
 !llava_finetuning.ipynb 
 test_trainer
 Fine_tune*
 tmp
+sample.json
