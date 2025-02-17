@@ -1,8 +1,11 @@
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import sys
 import time
 from typing import Optional
+import torchvision
 from ultralytics import YOLO
 
 from langchain.schema.runnable import RunnableLambda
@@ -14,11 +17,16 @@ from transformers import (
     LlavaNextVideoProcessor,
     BitsAndBytesConfig,
 )
+import torch.nn.functional as F
+
+import cv2
 import torch
 from langchain.chat_models import init_chat_model
 
 from training_notebooks.llava.utils import MAX_LENGTH, read_video_decord
 from dotenv import load_dotenv
+
+from twfich import FINCH
 load_dotenv()
 
 REPO_ID = os.getenv('REPO_ID')
@@ -110,8 +118,58 @@ class ObjectDetectionTool(BaseTool):
             return "no video"
         logger.debug(f"Video path object detection: {video_path}")
 
-        results =  self.model(str(Path(video_path).absolute()))
-        return [res.names[res.probs.top1] for res in results]
+        clusters, clusters_videos = VideoClustering.cluster(video_path)
+        # with ThreadPoolExecutor() as ex:
+            # results = ex.map(self.model, clusters)
+        clusters_results = [self.model(c, stream=True) for c in clusters_videos]
+
+        clusters_classes = []
+        for results in clusters_results:
+            cluster_class = Counter((res.names[res.probs.top1] for res in results)).most_common(n=1)[0]
+            clusters_classes.append(cluster_class)
+        
+        logger.debug(f"{clusters_classes=}")
+        logger.debug(f"{clusters=}")
+
+        return clusters_classes
 
     def _arun(self, query: str):
         raise NotImplementedError
+
+
+class VideoClustering:
+
+    @staticmethod
+    def get_partition(clusters, n):
+        start = 0
+        intervals = []
+        for i, _ in enumerate(clusters):
+            if clusters[i][n] != clusters[start][n]:
+                intervals.append((start, i - 1))
+                start = i
+        intervals.append((start, len(clusters) - 1))
+        return intervals
+    
+    @staticmethod
+    def cluster(video_path):
+        video, _ , metadata = torchvision.io.read_video(Path(video_path), pts_unit = "sec", output_format="TCHW")
+        fps = metadata["video_fps"]
+
+        video_vectors = video.reshape(video.size(0), -1)
+
+        # Temporally-Weighted Hierarchical Clustering
+        c, num_clust, _ = FINCH(video_vectors, tw_finch=True)
+
+        p = len(num_clust) - 1
+        logger.debug(f"clusters = {num_clust[-1]}")
+        clusters = VideoClustering.get_partition(c, p)
+        logger.debug(clusters)
+        logger.debug(f"{video.shape=}")
+
+
+        resized_video = F.interpolate(video, size=(640, 640), mode='bilinear', align_corners=False).float()
+        logger.debug(f"{resized_video.dtype=}")
+
+        clusters_videos = [resized_video[start:end] for start, end in clusters]
+
+        return clusters, clusters_videos
