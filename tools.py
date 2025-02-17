@@ -1,5 +1,6 @@
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+import csv
 import os
 from pathlib import Path
 import sys
@@ -118,20 +119,30 @@ class ObjectDetectionTool(BaseTool):
             return "no video"
         logger.debug(f"Video path object detection: {video_path}")
 
-        clusters, clusters_videos = VideoClustering.cluster(video_path)
-        # with ThreadPoolExecutor() as ex:
-            # results = ex.map(self.model, clusters)
-        clusters_results = [self.model(c, stream=True) for c in clusters_videos]
+        clusters = VideoClustering.cluster(video_path)
+        # clusters_results = [self.model(c, stream=True) for c in clusters_videos]
 
-        clusters_classes = []
-        for results in clusters_results:
-            cluster_class = Counter((res.names[res.probs.top1] for res in results)).most_common(n=1)[0]
-            clusters_classes.append(cluster_class)
-        
-        logger.debug(f"{clusters_classes=}")
-        logger.debug(f"{clusters=}")
 
-        return clusters_classes
+        csv_data = [("activity", "start", "end")] # TODO parallelize predictions
+        for video, start, end in clusters:
+            pred = self.get_prediction(video) # TODO handle if two consecutive classes
+            csv_data.append((pred, start, end))
+
+        filename = Path(f'tmp/{Path(video_path).stem}_output.csv')
+
+        # Writing to the CSV file
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            
+            # Write rows of data
+            writer.writerows(csv_data)
+
+        return csv_data
+    
+    def get_prediction(self, video):
+        result = self.model(video)
+        cluster_class = Counter((res.names[res.probs.top1] for res in result)).most_common(n=1)[0][0]
+        return cluster_class
 
     def _arun(self, query: str):
         raise NotImplementedError
@@ -170,6 +181,6 @@ class VideoClustering:
         resized_video = F.interpolate(video, size=(640, 640), mode='bilinear', align_corners=False).float()
         logger.debug(f"{resized_video.dtype=}")
 
-        clusters_videos = [resized_video[start:end] for start, end in clusters]
+        clusters_videos = [(resized_video[start:end], start, end) for start, end in clusters]
 
-        return clusters, clusters_videos
+        return clusters_videos
