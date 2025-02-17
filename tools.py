@@ -123,10 +123,12 @@ class ObjectDetectionTool(BaseTool):
         # clusters_results = [self.model(c, stream=True) for c in clusters_videos]
 
 
-        csv_data = [("activity", "start", "end")] # TODO parallelize predictions
+        csv_lines = [("activity", "start", "end")] # TODO parallelize predictions
         for video, start, end in clusters:
             pred = self.get_prediction(video) # TODO handle if two consecutive classes
-            csv_data.append((pred, start, end))
+            csv_lines.append((pred, start, end))
+
+        csv_data = merge_activities(csv_lines)
 
         filename = Path(f'tmp/{Path(video_path).stem}_output.csv')
 
@@ -184,3 +186,21 @@ class VideoClustering:
         clusters_videos = [(resized_video[start:end], start, end) for start, end in clusters]
 
         return clusters_videos
+
+
+
+def merge_activities(tuples):
+    merged = []
+    i = 0
+    while i < len(tuples):
+        item, start, end = tuples[i]
+        # Check if the next tuple has the same item
+        if i + 1 < len(tuples) and tuples[i + 1][0] == item:
+            # Merge the two tuples
+            next_start, next_end = tuples[i + 1][1], tuples[i + 1][2]
+            merged.append((item, min(start, next_start), max(end, next_end)))
+            i += 2  # Skip the next tuple as it is merged
+        else:
+            merged.append((item, start, end))
+            i += 1
+    return merged
