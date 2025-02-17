@@ -11,14 +11,18 @@ from langgraph.prebuilt import create_react_agent
 from langchain.agents import AgentExecutor
 from ultralytics import YOLO
 from langchain import hub
-from tools import ObjectDetectionTool, VideoActivityRecognitionTool
+from tools import ActivityDetectionTool, VideoActivityRecognitionTool
 from langchain.memory import ConversationBufferMemory
 from loguru import logger
 from ultralytics import YOLO
+from dotenv import load_dotenv
 
-from tools import ObjectDetectionTool, VideoActivityRecognitionTool, llm
+from tools import ActivityDetectionTool, VideoActivityRecognitionTool, llm
 
-YOLO_PATH = "runs/classify/custom_yolo7/weights/best.pt" # TODO add env variable
+load_dotenv()
+
+YOLO_CLASSIFICATION_PATH = os.getenv('YOLO_CLASSIFICATION_PATH')
+
 
 class App:
     def __init__(self, device) -> None:
@@ -30,8 +34,8 @@ class App:
             st.session_state.video_agent = create_react_agent(llm, video_tools, checkpointer=memory)
 
         if "obj_agent" not in st.session_state:
-            obj_tools = [ObjectDetectionTool().setup(YOLO(Path(YOLO_PATH).absolute(),verbose = False))]
-            st.session_state.obj_agent = create_react_agent(llm, obj_tools,  checkpointer=memory)
+            obj_tools = [ActivityDetectionTool().setup(YOLO(Path(YOLO_CLASSIFICATION_PATH).absolute(), verbose=False))]
+            st.session_state.obj_agent = create_react_agent(llm, obj_tools, checkpointer=memory)
 
     def _upload_image(self) -> None:
         uploaded_image = st.file_uploader("Upload an image")
@@ -47,17 +51,18 @@ class App:
     def _process_file(self, prompt, file_path: str) -> None:
         try:
             config = {"configurable": {"thread_id": "abc123"}}
-            with ProcessPoolExecutor() as ex: #TODO parallel execution
-                video_description = st.session_state.video_agent.invoke({"messages":[HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
-                object_response = st.session_state.obj_agent.invoke({"messages":[HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
-            
+            with ProcessPoolExecutor() as ex:  # TODO parallel execution
+                video_description = st.session_state.video_agent.invoke(
+                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
+                object_response = st.session_state.obj_agent.invoke(
+                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
+
             logger.debug(f"{video_description=}")
             logger.debug(f"{object_response=}")
 
             return video_description["messages"][-1].content, object_response["messages"][-1].content
         except Exception as e:
             logger.error(e)
-
 
     def _copy_file(self, uploaded_image):
         tmp_dir = "tmp/"
@@ -82,18 +87,18 @@ class App:
                 type=["jpg", "jpeg", "png", "mp4", "mkv"],
             )
             submit_button = st.form_submit_button("Send")
-        
+
         # display the chat messages
         for message in st.session_state.messages:
             with st.chat_message(message.type):
                 st.markdown(message.content.split(". Answer given")[0])
                 if "file_path" not in message.additional_kwargs:
                     continue
-                
+
                 # image
                 if message.additional_kwargs["file_path"].suffix[1:] in ["jpg", "jpeg", "png"]:
                     st.image(str(message.additional_kwargs["file_path"]))
-                
+
                 # video
                 if message.additional_kwargs["file_path"].suffix[1:] in ["mp4", "mkv"]:
                     st.video(str(message.additional_kwargs["file_path"]))
@@ -104,16 +109,16 @@ class App:
             if uploaded_file is not None:
                 self._copy_file(uploaded_file)
                 tmp_path = Path(f"tmp/{uploaded_file.name}")
-                
+
                 video_description, obj_detection = self._process_file(message.content, tmp_path)
                 message.content += ". Answer given these informations about the file, don't write the file path:\n"
                 if video_description:
                     message.content += f"{video_description=}\n"
                 if obj_detection:
                     message.content += f"{obj_detection=}\n"
-                
+
                 # .additional_kwargs.update({"video_description":video, "object_description":obj})
-                message.additional_kwargs.update({"file_path":tmp_path})
+                message.additional_kwargs.update({"file_path": tmp_path})
 
             # Append user's message to session state
             st.session_state.messages.append(message)

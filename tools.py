@@ -102,15 +102,15 @@ class VideoActivityRecognitionTool(BaseTool):
         raise NotImplementedError
 
 
-class ObjectDetectionTool(BaseTool):
-    name: str = "Video Object Detection Tool"
+class ActivityDetectionTool(BaseTool):
+    name: str = "Video Activity Detection Tool"
     description: str = (
-        "Performs object detection on a video file. Given the video path, it identifies and returns objects detected in the video frames."
+        "Performs activity detection on a video file. Given the video path, it identifies and returns activities detected in the video frames."
     )
 
     model: Optional[YOLO] = None
 
-    def setup(self, _model: YOLO) -> "ObjectDetectionTool":
+    def setup(self, _model: YOLO) -> "ActivityDetectionTool":
         self.model = _model
         return self
 
