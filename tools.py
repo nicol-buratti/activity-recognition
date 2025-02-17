@@ -34,7 +34,7 @@ REPO_ID = os.getenv('REPO_ID')
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model_id = "llama3.2:1b" # TODO add to .env
+model_id = os.getenv('OLLAMA_LLM')
 llm = init_chat_model(model_id, model_provider="ollama", temperature=0.1)
 
 logger.remove()
@@ -120,12 +120,10 @@ class ObjectDetectionTool(BaseTool):
         logger.debug(f"Video path object detection: {video_path}")
 
         clusters = VideoClustering.cluster(video_path)
-        # clusters_results = [self.model(c, stream=True) for c in clusters_videos]
 
-
-        csv_lines = [("activity", "start", "end")] # TODO parallelize predictions
+        csv_lines = [("activity", "start", "end")]
         for video, start, end in clusters:
-            pred = self.get_prediction(video) # TODO handle if two consecutive classes
+            pred = self.get_prediction(video)
             csv_lines.append((pred, start, end))
 
         csv_data = merge_activities(csv_lines)
@@ -135,11 +133,9 @@ class ObjectDetectionTool(BaseTool):
         # Writing to the CSV file
         with open(filename, mode='w', newline='') as file:
             writer = csv.writer(file)
-            
-            # Write rows of data
             writer.writerows(csv_data)
 
-        return csv_data
+        return f"Detected activities with corresponding start and end timestamps: {csv_data}"
     
     def get_prediction(self, video):
         result = self.model(video)
