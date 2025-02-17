@@ -4,9 +4,14 @@ NUM_FRAMES=16
 # max token length
 MAX_LENGTH=30_000
 
-# llm for chat program
+# ollama llm for chat
+OLLAMA_LLM=llama3.2:1b
+
+# hf model for video recognition
 REPO_ID=llava-hf/LLaVA-NeXT-Video-7B-hf
-# REPO_ID=cams01/LLaVa-robot-activity-recognition
 
 # path of action clips for fine tuning
 ACTION_CLIPS_PATH=atlas_dione_objectdetection\ATLAS_Dione_ObjectDetection_Study_ActionClips\ATLAS_Dione_ObjectDetection_Study_ActionClips
+
+# path for the YOLO classification model
+YOLO_CLASSIFICATION_PATH =runs/classify/custom_yolo7/weights/best.pt
