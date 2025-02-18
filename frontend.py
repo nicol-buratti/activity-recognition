@@ -29,9 +29,9 @@ class App:
             video_tools = [VideoActivityRecognitionTool().setup()]
             st.session_state.video_agent = create_react_agent(llm, video_tools, checkpointer=memory)
 
-        if "obj_agent" not in st.session_state:
+        if "act_classification_agent" not in st.session_state:
             obj_tools = [ActivityDetectionTool().setup(YOLO(Path(YOLO_CLASSIFICATION_PATH).absolute(), verbose=False))]
-            st.session_state.obj_agent = create_react_agent(llm, obj_tools, checkpointer=memory)
+            st.session_state.act_classification_agent = create_react_agent(llm, obj_tools, checkpointer=memory)
 
         if "arm_tracking" not in st.session_state:
             st.session_state.arm_tracking = VideoArmTrackingTool().setup(YOLO(Path(YOLO_TRACKING_PATH).absolute(), verbose=False))
@@ -47,7 +47,7 @@ class App:
             
             # Extract necessary objects from session state to pass to worker functions
             video_agent = st.session_state.video_agent
-            obj_agent = st.session_state.obj_agent
+            obj_agent = st.session_state.act_classification_agent
             arm_tracking = st.session_state.arm_tracking
 
             with ThreadPoolExecutor() as executor:
@@ -109,7 +109,7 @@ class App:
             prompt = st.text_input("Enter your message:")
             uploaded_file = st.file_uploader(
                 "Upload an image (optional)",
-                type=["jpg", "jpeg", "png", "mp4", "mkv", "avi"],
+                type=["mp4", "mkv", "avi"],
             )
             submit_button = st.form_submit_button("Send")
 
@@ -121,8 +121,8 @@ class App:
                     continue
 
                 # image
-                if message.additional_kwargs["file_path"].suffix[1:] in ["jpg", "jpeg", "png"]:
-                    st.image(str(message.additional_kwargs["file_path"]))
+                # if message.additional_kwargs["file_path"].suffix[1:] in ["jpg", "jpeg", "png"]:
+                #     st.image(str(message.additional_kwargs["file_path"]))
 
                 # video
                 if message.additional_kwargs["file_path"].suffix[1:] in ["mp4", "mkv"]:
@@ -135,15 +135,14 @@ class App:
                 self._copy_file(uploaded_file)
                 tmp_path = Path(f"tmp/{uploaded_file.name}")
 
-                video_description, obj_detection, tracked_video_directory = self._process_file(message.content, tmp_path)
-                message.content += ". Answer given these informations about the file, writing it in a more readable way for a user, don't write the file path:\n"
+                video_description, activity_detection, tracked_video_directory = self._process_file(message.content, tmp_path)
+                message.content += ". Answer given these informations about the file, explain with simple words, don't write the file path, maintain the video description as it is:\n"
                 if video_description:
-                    message.content += f"{video_description=}\n"
-                if obj_detection:
-                    message.content += f"{obj_detection=}\n"
+                    message.content += f"Description of the video in a healthcare environment carried out by two robotic arms: '{video_description}', maintain the description in the response'\n"
+                if activity_detection:
+                    message.content += f"Detected activities of the video with corresponding start and end timestamps: '{activity_detection}'\n"
 
-                # .additional_kwargs.update({"video_description":video, "object_description":obj})
-                message.additional_kwargs.update({"file_path": tmp_path})
+                message.additional_kwargs.update({"file_path": tracked_video_directory})
 
             # Append user's message to session state
             st.session_state.messages.append(message)
@@ -165,16 +164,13 @@ class App:
                 st.session_state.messages.append(response)
             print(f"{st.session_state.messages=}")
 
-
-
-
 def get_video_description(agent, prompt, file_path, config):
     return agent.invoke(
-        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}.")]}, config)
+        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}. Answer with an exaustive video description")]}, config)
 
 def get_object_response(agent, prompt, file_path, config):
     return agent.invoke(
-        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}. Write it in a more readable way.")]}, config)
+        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}. Write it in a more readable way for the common user.")]}, config)
 
 def track_video(agent, file_path):
     return agent.track(file_path)
@@ -182,4 +178,3 @@ def track_video(agent, file_path):
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     App(device=device).run()
-
