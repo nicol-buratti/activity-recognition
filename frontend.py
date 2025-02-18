@@ -1,4 +1,4 @@
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
 import streamlit as st
@@ -18,7 +18,7 @@ from tools import ActivityDetectionTool, VideoActivityRecognitionTool, llm
 load_dotenv()
 
 YOLO_CLASSIFICATION_PATH = os.getenv('YOLO_CLASSIFICATION_PATH')
-YOLO_TRACKING_PATH = "runs/weights/best.pt" # TODO put in .env
+YOLO_TRACKING_PATH = Path("runs/detect/custom_yolo3/weights/best.pt") # TODO put in .env
 
 class App:
     def __init__(self, device) -> None:
@@ -36,6 +36,55 @@ class App:
         if "arm_tracking" not in st.session_state:
             st.session_state.arm_tracking = VideoArmTrackingTool().setup(YOLO(Path(YOLO_TRACKING_PATH).absolute(), verbose=False))
 
+    def process_video(self, clip_path):
+        clip = VideoFileClip(clip_path)
+        clip.write_videofile(clip_path.with_suffix(".mkv"))
+        return clip_path.with_suffix(".mkv")
+    
+    def _process_file(self, prompt, file_path: str) -> None:
+        try:
+            config = {"configurable": {"thread_id": "abc123"}}
+            
+            # Extract necessary objects from session state to pass to worker functions
+            video_agent = st.session_state.video_agent
+            obj_agent = st.session_state.obj_agent
+            arm_tracking = st.session_state.arm_tracking
+
+            with ThreadPoolExecutor() as executor:
+                # Submit the tasks to the executor
+                future_video_description = executor.submit(get_video_description, video_agent, prompt, file_path, config) # NO
+                future_object_response = executor.submit(get_object_response, obj_agent, prompt, file_path, config) # NO
+                future_tracked_video = executor.submit(track_video, arm_tracking, file_path) # YES
+
+                # Wait for all futures to complete and collect results
+                for future in as_completed([future_video_description, future_object_response, future_tracked_video]):
+                    if future == future_video_description:
+                        video_description = future.result()
+                    elif future == future_object_response:
+                        object_response = future.result()
+                    elif future == future_tracked_video:
+                        tracked_video_directory = future.result()
+
+            # After all tasks have completed, process the video to convert it
+            tracked_video_directory = self.process_video(tracked_video_directory)
+
+            # Log results
+            logger.debug(f"{video_description=}")
+            logger.debug(f"{object_response=}")
+            logger.debug(f"{tracked_video_directory=}")
+            return video_description["messages"][-1].content, object_response["messages"][-1].content, tracked_video_directory
+
+        except Exception as e:
+            logger.error(e)
+
+
+    def _copy_file(self, uploaded_image):
+        tmp_dir = "tmp/"
+        os.makedirs(tmp_dir, exist_ok=True)
+        temp_file_path = os.path.join(tmp_dir, uploaded_image.name)
+        with open(temp_file_path, "wb") as file:
+            file.write(uploaded_image.getvalue())
+    
     def _upload_image(self) -> None:
         uploaded_image = st.file_uploader("Upload an image")
         if uploaded_image:
@@ -46,37 +95,6 @@ class App:
                 file.write(uploaded_image.getvalue())
             st.sidebar.image(temp_file_path, width=200)
             self._process_image(temp_file_path)
-
-    def _process_file(self, prompt, file_path: str) -> None:
-        try:
-            config = {"configurable": {"thread_id": "abc123"}}
-            with ProcessPoolExecutor() as ex:  # TODO parallel execution
-                video_description = st.session_state.video_agent.invoke(
-                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
-                object_response = st.session_state.obj_agent.invoke(
-                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}. Write it in a more readable way.")]}, config)
-                tracked_video_directory = st.session_state.arm_tracking.track(file_path)
-                
-            logger.debug(f"{video_description=}")
-            logger.debug(f"{object_response=}")
-            logger.debug(f"{tracked_video_directory=}")
-
-            # convert .avi to .mkv for streamlit compatibility
-            clip = VideoFileClip(tracked_video_directory)
-            clip.write_videofile(tracked_video_directory.with_suffix(".mkv"))
-            tracked_video_directory = tracked_video_directory.with_suffix(".mkv")
- 
-
-            return video_description["messages"][-1].content, object_response["messages"][-1].content, tracked_video_directory
-        except Exception as e:
-            logger.error(e)
-
-    def _copy_file(self, uploaded_image):
-        tmp_dir = "tmp/"
-        os.makedirs(tmp_dir, exist_ok=True)
-        temp_file_path = os.path.join(tmp_dir, uploaded_image.name)
-        with open(temp_file_path, "wb") as file:
-            file.write(uploaded_image.getvalue())
 
     def run(self) -> None:
         st.title("Chat with LLava")
@@ -148,6 +166,20 @@ class App:
             print(f"{st.session_state.messages=}")
 
 
+
+
+def get_video_description(agent, prompt, file_path, config):
+    return agent.invoke(
+        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}.")]}, config)
+
+def get_object_response(agent, prompt, file_path, config):
+    return agent.invoke(
+        {"messages": [HumanMessage(content=f"{prompt}. Given the following video:{file_path}. Write it in a more readable way.")]}, config)
+
+def track_video(agent, file_path):
+    return agent.track(file_path)
+
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     App(device=device).run()
+

@@ -117,28 +117,32 @@ class ActivityDetectionTool(BaseTool):
     def _run(self, video_path) -> str:
         if not (Path(video_path).exists() and Path(video_path).is_file()):
             return "no video"
-        logger.debug(f"Video path object detection: {video_path}")
+        
+        try:
+            logger.debug(f"Video path object detection: {video_path}")
 
-        clusters = VideoClustering.cluster(video_path)
+            clusters = VideoClustering.cluster(video_path)
 
-        csv_lines = [("activity", "start", "end")]
-        for video, start, end in clusters:
-            pred = self.get_prediction(video)
-            csv_lines.append((pred, start, end))
+            csv_lines = [("activity", "start", "end")]
+            for video, start, end in clusters:
+                pred = self.get_prediction(video)
+                csv_lines.append((pred, start, end))
 
-        csv_data = merge_activities(csv_lines)
+            csv_data = merge_activities(csv_lines)
 
-        filename = Path(f'tmp/{Path(video_path).stem}_output.csv')
+            filename = Path(f'tmp/{Path(video_path).stem}_output.csv')
 
-        # Writing to the CSV file
-        with open(filename, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerows(csv_data)
+            # Writing to the CSV file
+            with open(filename, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(csv_data)
 
-        logger.debug(f"{csv_data=}")
+            logger.debug(f"{csv_data=}")
 
-        return f"Detected activities with corresponding start and end timestamps: {csv_data}"
-    
+            return f"Detected activities with corresponding start and end timestamps: {csv_data}"
+        except Exception as e:
+            logger.error(e)
+            
     def get_prediction(self, video):
         result = self.model(video)
         cluster_class = Counter((res.names[res.probs.top1] for res in result)).most_common(n=1)[0][0]
@@ -184,8 +188,7 @@ class VideoClustering:
     
     @staticmethod
     def cluster(video_path):
-        video, _ , metadata = torchvision.io.read_video(Path(video_path), pts_unit = "sec", output_format="TCHW")
-        fps = metadata["video_fps"]
+        video, _ , _ = torchvision.io.read_video(Path(video_path), pts_unit = "sec", output_format="TCHW")
 
         video_vectors = video.reshape(video.size(0), -1)
 
