@@ -1,6 +1,6 @@
-train: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\train\\images
-val: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\val\\images
-test: C:\\Users\\Informatica_UNICAM\\Desktop\\activity-recognition\\dataset\\test
+train: C:\\Users\\Informatica_UNICAM\\Desktop\\csd\\activity-recognition\\training_notebooks\\yolo_object_detection\\dataset\\train\\images
+val: C:\\Users\\Informatica_UNICAM\\Desktop\\csd\\activity-recognition\\training_notebooks\\yolo_object_detection\\dataset\\val\\images
+test: C:\\Users\\Informatica_UNICAM\\Desktop\\csd\\activity-recognition\\training_notebooks\\yolo_object_detection\\dataset\\test
 
 nc: 2
 names: ['LeftTool','RightTool']
