@@ -135,6 +135,8 @@ class ActivityDetectionTool(BaseTool):
             writer = csv.writer(file)
             writer.writerows(csv_data)
 
+        logger.debug(f"{csv_data=}")
+
         return f"Detected activities with corresponding start and end timestamps: {csv_data}"
     
     def get_prediction(self, video):
@@ -144,6 +146,27 @@ class ActivityDetectionTool(BaseTool):
 
     def _arun(self, query: str):
         raise NotImplementedError
+
+class VideoArmTrackingTool:
+    model: Optional[YOLO] = None
+
+    def setup(self, _model: YOLO) -> "ActivityDetectionTool":
+        self.model = _model
+        return self
+
+    def track(self, video_path) -> str:
+        if not (Path(video_path).exists() and Path(video_path).is_file()):
+            return "no video"
+        logger.debug(f"Video arm tracking: {video_path}")
+
+        results = self.model.track(Path(video_path).absolute(), save = True)
+        video_dir = results[0].save_dir
+        tracked_video = [f for f in Path(video_dir).iterdir() if f.is_file()][0]
+        return tracked_video
+
+    def _arun(self, query: str):
+        raise NotImplementedError
+
 
 
 class VideoClustering:

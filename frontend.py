@@ -3,26 +3,22 @@ import os
 from pathlib import Path
 import streamlit as st
 import torch
-from langchain.agents import initialize_agent
-from langchain.agents.agent import AgentType
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
-from langchain.agents import AgentExecutor
 from ultralytics import YOLO
-from langchain import hub
-from tools import ActivityDetectionTool, VideoActivityRecognitionTool
-from langchain.memory import ConversationBufferMemory
+from tools import ActivityDetectionTool, VideoActivityRecognitionTool, VideoArmTrackingTool
 from loguru import logger
 from ultralytics import YOLO
 from dotenv import load_dotenv
+from  moviepy import VideoFileClip
 
 from tools import ActivityDetectionTool, VideoActivityRecognitionTool, llm
 
 load_dotenv()
 
 YOLO_CLASSIFICATION_PATH = os.getenv('YOLO_CLASSIFICATION_PATH')
-
+YOLO_TRACKING_PATH = "runs/weights/best.pt" # TODO put in .env
 
 class App:
     def __init__(self, device) -> None:
@@ -36,6 +32,9 @@ class App:
         if "obj_agent" not in st.session_state:
             obj_tools = [ActivityDetectionTool().setup(YOLO(Path(YOLO_CLASSIFICATION_PATH).absolute(), verbose=False))]
             st.session_state.obj_agent = create_react_agent(llm, obj_tools, checkpointer=memory)
+
+        if "arm_tracking" not in st.session_state:
+            st.session_state.arm_tracking = VideoArmTrackingTool().setup(YOLO(Path(YOLO_TRACKING_PATH).absolute(), verbose=False))
 
     def _upload_image(self) -> None:
         uploaded_image = st.file_uploader("Upload an image")
@@ -55,12 +54,20 @@ class App:
                 video_description = st.session_state.video_agent.invoke(
                     {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
                 object_response = st.session_state.obj_agent.invoke(
-                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}.")]}, config)
-
+                    {"messages": [HumanMessage(content=prompt + f". Given the following video:{file_path}. Write it in a more readable way.")]}, config)
+                tracked_video_directory = st.session_state.arm_tracking.track(file_path)
+                
             logger.debug(f"{video_description=}")
             logger.debug(f"{object_response=}")
+            logger.debug(f"{tracked_video_directory=}")
 
-            return video_description["messages"][-1].content, object_response["messages"][-1].content
+            # convert .avi to .mkv for streamlit compatibility
+            clip = VideoFileClip(tracked_video_directory)
+            clip.write_videofile(tracked_video_directory.with_suffix(".mkv"))
+            tracked_video_directory = tracked_video_directory.with_suffix(".mkv")
+ 
+
+            return video_description["messages"][-1].content, object_response["messages"][-1].content, tracked_video_directory
         except Exception as e:
             logger.error(e)
 
@@ -84,7 +91,7 @@ class App:
             prompt = st.text_input("Enter your message:")
             uploaded_file = st.file_uploader(
                 "Upload an image (optional)",
-                type=["jpg", "jpeg", "png", "mp4", "mkv"],
+                type=["jpg", "jpeg", "png", "mp4", "mkv", "avi"],
             )
             submit_button = st.form_submit_button("Send")
 
@@ -110,8 +117,8 @@ class App:
                 self._copy_file(uploaded_file)
                 tmp_path = Path(f"tmp/{uploaded_file.name}")
 
-                video_description, obj_detection = self._process_file(message.content, tmp_path)
-                message.content += ". Answer given these informations about the file, don't write the file path:\n"
+                video_description, obj_detection, tracked_video_directory = self._process_file(message.content, tmp_path)
+                message.content += ". Answer given these informations about the file, writing it in a more readable way for a user, don't write the file path:\n"
                 if video_description:
                     message.content += f"{video_description=}\n"
                 if obj_detection:
@@ -129,7 +136,7 @@ class App:
                     if "image" in uploaded_file.type:
                         st.image(uploaded_file)
                     if "video" in uploaded_file.type:
-                        st.video(uploaded_file)
+                        st.video(str(tracked_video_directory))
 
             # Get response from the LLM
             with st.chat_message("assistant"):
