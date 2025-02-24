@@ -34,3 +34,8 @@ To run the program, use Streamlit to start the front-end interface:
 streamlit run ./frontend.py
 ```
 This will launch the chat interface where you can interact with the system and perform activity recognition tasks on videos.
+
+# Contributors
+- [Buratti Nicol](https://github.com/nicol-buratti)
+- [Pennesi Diego](https://github.com/Diezz01)
+- [Reucci Filippo]([text](https://github.com/reus702))
