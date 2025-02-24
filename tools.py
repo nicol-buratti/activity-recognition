@@ -41,7 +41,7 @@ logger.remove()
 logger.add(sys.stderr, level="DEBUG")
 
 class VideoActivityRecognitionTool(BaseTool):
-    name: str = "Video Activity Description Tool"
+    name: str = "Video Description Tool"
     description: str = (
         "Generates a descriptive summary of the activities or scenes in a video, only if provided. "
         "Provide the video path to receive an activity description based on its content."
@@ -68,7 +68,7 @@ class VideoActivityRecognitionTool(BaseTool):
 
     def _run(self, video_path: str) -> str:
         if not (Path(video_path).exists() and Path(video_path).is_file()):
-            return "no video"
+            return ""
 
         logger.debug(f"Video path video recognition: {video_path}")
         video = read_video_decord(video_path)
@@ -116,10 +116,10 @@ class ActivityDetectionTool(BaseTool):
 
     def _run(self, video_path) -> str:
         if not (Path(video_path).exists() and Path(video_path).is_file()):
-            return "no video"
+            return ""
         
         try:
-            logger.debug(f"Video path object detection: {video_path}")
+            logger.debug(f"Video path activity detection: {video_path}")
 
             clusters = VideoClustering.cluster(video_path)
 
@@ -160,12 +160,13 @@ class VideoArmTrackingTool:
 
     def track(self, video_path) -> str:
         if not (Path(video_path).exists() and Path(video_path).is_file()):
-            return "no video"
+            return ""
         logger.debug(f"Video arm tracking: {video_path}")
 
         results = self.model.track(Path(video_path).absolute(), save = True)
         video_dir = results[0].save_dir
         tracked_video = [f for f in Path(video_dir).iterdir() if f.is_file()][0]
+        logger.debug(f"{tracked_video=}")
         return tracked_video
 
     def _arun(self, query: str):
@@ -198,12 +199,8 @@ class VideoClustering:
         p = len(num_clust) - 1
         logger.debug(f"clusters = {num_clust[-1]}")
         clusters = VideoClustering.get_partition(c, p)
-        logger.debug(clusters)
-        logger.debug(f"{video.shape=}")
-
 
         resized_video = F.interpolate(video, size=(640, 640), mode='bilinear', align_corners=False).float()
-        logger.debug(f"{resized_video.dtype=}")
 
         clusters_videos = [(resized_video[start:end], start, end) for start, end in clusters]
 
