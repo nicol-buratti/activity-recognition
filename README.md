@@ -35,7 +35,7 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### Additional Dependencies
+### 5. Additional Dependencies
 - **Ollama**: Required for LLM processing and chat capabilities.
 - **PyTorch with CUDA**: Required for deep learning and video processing. Ensure you have the correct CUDA version for your system.
 
