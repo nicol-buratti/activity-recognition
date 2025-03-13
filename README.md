@@ -38,4 +38,4 @@ This will launch the chat interface where you can interact with the system and p
 # Contributors
 - [Buratti Nicol](https://github.com/nicol-buratti)
 - [Pennesi Diego](https://github.com/Diezz01)
-- [Reucci Filippo]([text](https://github.com/reus702))
+- [Reucci Filippo](https://github.com/reus702)
