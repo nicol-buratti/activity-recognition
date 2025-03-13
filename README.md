@@ -9,11 +9,31 @@ This program is designed as a chat interface, enabling users to perform classifi
 - **Video Reasoning**: Performs reasoning over video data for advanced task understanding.
 
 ## Installation
-To install the necessary dependencies, run the following command:
+To install the necessary dependencies, run the following commands:
 
+### 1. Clone the Repository  
+```bash
+git clone https://github.com/nicol-buratti/activity-recognition.git
+cd activity-recognition
+```
+
+### 2. Create a Virtual Environment
+```bash
+python -m venv venv
+```
+### 3. Activate the Virtual Environment
+  - On Windows
+    ```bash
+    venv\Scripts\activate
+    ```
+  - On macOS/Linux
+    ```bash
+    source venv/bin/activate
+    ```
+### 4. Install Dependencies
 ```bash
 pip install -r requirements.txt
-``` 
+```
 
 ### Additional Dependencies
 - **Ollama**: Required for LLM processing and chat capabilities.
